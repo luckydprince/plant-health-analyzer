@@ -207,6 +207,11 @@ with st.sidebar:
         "📊  Correlation Analysis",
         "🗺️  Spatial Map",
         "📈  R² Rankings",
+        "🔢  Fig 1 · Correlation Panel",
+        "🟩  Fig 2 · R² Heatmap",
+        "🌡️  Fig 3 · Temp vs Indices",
+        "🗺  Fig 4 · Spatial Panels",
+        "🔗  Advanced Correlations",
     ], label_visibility="collapsed")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
@@ -707,3 +712,538 @@ elif "R² Rankings" in page:
     st.download_button("⬇ Download R² Rankings",
                        buf3.getvalue(), file_name="r2_rankings.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: Fig 1 — Correlation Panel (5×5 matrix)
+# ═══════════════════════════════════════════════════════════════════════════════
+elif "Fig 1" in page:
+    st.markdown("## 🔢 Fig 1 — Correlation Panel (5×5 Matrix)")
+    st.markdown(
+        "<p style='color:#8b949e;font-size:13px;margin-bottom:1rem'>"
+        "Every index pair plotted against each other. Diagonal shows health-class "
+        "distributions. Each cell has an R² badge: "
+        "<span style='color:#2ecc71'>green ≥ 0.60</span>, "
+        "<span style='color:#f39c12'>orange 0.30–0.59</span>, "
+        "<span style='color:#e74c3c'>red &lt; 0.30</span>.</p>",
+        unsafe_allow_html=True
+    )
+
+    feat_labels = {
+        "NDVI": "NDVI", "GNDVI": "GNDVI", "NDRE": "NDRE",
+        "SPAD": "SPAD\n(Chlorophyll)", "Temperature": "Canopy\nTemp (°C)"
+    }
+    n = len(features)
+    fig, axes = plt.subplots(n, n, figsize=(14, 13))
+    fig.patch.set_facecolor(BG)
+    fig.suptitle("Multi-Sensor Correlation Panel  |  R² Relationships Between Indices",
+                 color=TEXT, fontsize=13, fontweight="bold", y=1.001)
+
+    for i, fy in enumerate(features):
+        for j, fx in enumerate(features):
+            ax = axes[i][j]
+            ax.set_facecolor(PANEL)
+            for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+
+            if i == j:
+                for h, c in HC.items():
+                    sub = df[df["Health"] == h][fy]
+                    if len(sub) > 1:
+                        ax.hist(sub, bins=4, color=c, alpha=0.55, edgecolor="none")
+                    else:
+                        ax.axvline(sub.values[0], color=c, linewidth=2, alpha=0.8)
+                ax.set_facecolor("#1a1f2e")
+                ax.text(0.5, 0.92, feat_labels[fy], transform=ax.transAxes,
+                        ha="center", va="top", color=TEXT, fontsize=8, fontweight="bold")
+            else:
+                x, y = df[fx].values, df[fy].values
+                for h in ["Healthy", "Unhealthy", "Dry"]:
+                    mask = df["Health"] == h
+                    ax.scatter(df.loc[mask, fx], df.loc[mask, fy],
+                               color=HC[h], marker=HM[h], s=40, alpha=0.9, zorder=3, edgecolors="none")
+                slope, intercept, r, p, _ = stats.linregress(x, y)
+                r2 = r ** 2
+                xfit = np.linspace(x.min(), x.max(), 100)
+                ax.plot(xfit, slope * xfit + intercept, color="#58a6ff", linewidth=1.2, alpha=0.8)
+                badge = "#2ecc71" if r2 >= 0.6 else ("#f39c12" if r2 >= 0.3 else "#e74c3c")
+                ax.text(0.97, 0.97, f"R²={r2:.2f}", transform=ax.transAxes,
+                        ha="right", va="top", fontsize=7, fontweight="bold", color=badge,
+                        bbox=dict(boxstyle="round,pad=0.2", facecolor="#0d1117",
+                                  edgecolor=badge, alpha=0.85))
+
+            ax.tick_params(colors=MUTED, labelsize=6, length=2)
+            for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+            ax.set_xlim(df[fx].min() * 0.95, df[fx].max() * 1.05)
+            ax.set_ylim(df[fy].min() * 0.92, df[fy].max() * 1.08)
+            if i == n - 1:
+                ax.set_xlabel(feat_labels[fx], color=MUTED, fontsize=7)
+            else:
+                ax.set_xticklabels([])
+            if j == 0:
+                ax.set_ylabel(feat_labels[fy], color=MUTED, fontsize=7)
+            else:
+                ax.set_yticklabels([])
+
+    handles = [mpatches.Patch(color=c, label=h) for h, c in HC.items()]
+    fig.legend(handles=handles, loc="lower center", ncol=3, framealpha=0.3,
+               facecolor=PANEL, labelcolor=TEXT, fontsize=9, bbox_to_anchor=(0.5, -0.02))
+    plt.tight_layout(pad=0.4)
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
+
+    buf = io.BytesIO()
+    fig_save, axes_save = plt.subplots(n, n, figsize=(14, 13))
+    fig_save.patch.set_facecolor(BG)
+    # rebuild for save
+    for i, fy in enumerate(features):
+        for j, fx in enumerate(features):
+            ax = axes_save[i][j]
+            ax.set_facecolor(PANEL)
+            if i == j:
+                for h, c in HC.items():
+                    sub = df[df["Health"] == h][fy]
+                    if len(sub) > 1: ax.hist(sub, bins=4, color=c, alpha=0.55, edgecolor="none")
+                    else: ax.axvline(sub.values[0], color=c, linewidth=2, alpha=0.8)
+                ax.set_facecolor("#1a1f2e")
+                ax.text(0.5, 0.92, feat_labels[fy], transform=ax.transAxes, ha="center", va="top", color=TEXT, fontsize=8, fontweight="bold")
+            else:
+                x, y = df[fx].values, df[fy].values
+                for h in ["Healthy","Unhealthy","Dry"]:
+                    mask = df["Health"]==h
+                    ax.scatter(df.loc[mask,fx],df.loc[mask,fy],color=HC[h],marker=HM[h],s=40,alpha=0.9,zorder=3,edgecolors="none")
+                slope,intercept,r,p,_ = stats.linregress(x,y); r2=r**2
+                xfit=np.linspace(x.min(),x.max(),100)
+                ax.plot(xfit,slope*xfit+intercept,color="#58a6ff",linewidth=1.2,alpha=0.8)
+                badge="#2ecc71" if r2>=0.6 else ("#f39c12" if r2>=0.3 else "#e74c3c")
+                ax.text(0.97,0.97,f"R²={r2:.2f}",transform=ax.transAxes,ha="right",va="top",fontsize=7,fontweight="bold",color=badge,
+                        bbox=dict(boxstyle="round,pad=0.2",facecolor="#0d1117",edgecolor=badge,alpha=0.85))
+            ax.tick_params(colors=MUTED,labelsize=6,length=2)
+            for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+            ax.set_xlim(df[fx].min()*0.95,df[fx].max()*1.05)
+            ax.set_ylim(df[fy].min()*0.92,df[fy].max()*1.08)
+            if i==n-1: ax.set_xlabel(feat_labels[fx],color=MUTED,fontsize=7)
+            else: ax.set_xticklabels([])
+            if j==0: ax.set_ylabel(feat_labels[fy],color=MUTED,fontsize=7)
+            else: ax.set_yticklabels([])
+    fig_save.legend(handles=handles,loc="lower center",ncol=3,framealpha=0.3,facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.02))
+    plt.tight_layout(pad=0.4)
+    fig_save.savefig(buf, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close(fig_save)
+    st.download_button("⬇ Download Fig 1 (PNG)", buf.getvalue(),
+                       file_name="fig1_correlation_panel.png", mime="image/png")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: Fig 2 — R² Summary Heatmap
+# ═══════════════════════════════════════════════════════════════════════════════
+elif "Fig 2" in page:
+    st.markdown("## 🟩 Fig 2 — R² Summary Heatmap")
+    st.markdown(
+        "<p style='color:#8b949e;font-size:13px;margin-bottom:1rem'>"
+        "Clean matrix of all pairwise R² values at a glance. "
+        "Brighter green = stronger correlation.</p>",
+        unsafe_allow_html=True
+    )
+
+    n = len(features)
+    r2_mat = np.zeros((n, n))
+    for i, fi in enumerate(features):
+        for j, fj in enumerate(features):
+            if i == j: r2_mat[i, j] = 1.0
+            else:
+                _, _, r, _, _ = stats.linregress(df[fi].values, df[fj].values)
+                r2_mat[i, j] = round(r**2, 3)
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    fig.patch.set_facecolor(BG); ax.set_facecolor(PANEL)
+    cmap_r2 = LinearSegmentedColormap.from_list("r2", ["#161b22","#1a3a5c","#2563eb","#2ecc71"])
+    im = ax.imshow(r2_mat, cmap=cmap_r2, vmin=0, vmax=1, aspect="auto")
+    for i in range(n):
+        for j in range(n):
+            v = r2_mat[i, j]
+            ax.text(j, i, f"{v:.3f}", ha="center", va="center",
+                    fontsize=11, fontweight="bold",
+                    color="white" if v < 0.7 else "#0d1117")
+    ax.set_xticks(range(n)); ax.set_yticks(range(n))
+    ax.set_xticklabels(feat_display, color=TEXT, fontsize=11)
+    ax.set_yticklabels(feat_display, color=TEXT, fontsize=11)
+    ax.tick_params(colors=MUTED, length=0)
+    for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("R² Value", color=MUTED, fontsize=9)
+    plt.setp(plt.getp(cbar.ax.axes, "yticklabels"), color=MUTED)
+    cbar.outline.set_edgecolor(GRID)
+    ax.set_title("R² Correlation Heatmap  |  All Index Pairs",
+                 color=TEXT, fontsize=12, fontweight="bold", pad=14)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close()
+
+    st.markdown("### R² Table")
+    r2_df = pd.DataFrame(r2_mat.round(3), index=feat_display, columns=feat_display)
+    st.dataframe(r2_df, use_container_width=True)
+
+    buf = io.BytesIO()
+    fig2, ax2 = plt.subplots(figsize=(7,6))
+    fig2.patch.set_facecolor(BG); ax2.set_facecolor(PANEL)
+    im2 = ax2.imshow(r2_mat, cmap=cmap_r2, vmin=0, vmax=1, aspect="auto")
+    for i in range(n):
+        for j in range(n):
+            v=r2_mat[i,j]
+            ax2.text(j,i,f"{v:.3f}",ha="center",va="center",fontsize=11,fontweight="bold",color="white" if v<0.7 else "#0d1117")
+    ax2.set_xticks(range(n)); ax2.set_yticks(range(n))
+    ax2.set_xticklabels(feat_display,color=TEXT,fontsize=11)
+    ax2.set_yticklabels(feat_display,color=TEXT,fontsize=11)
+    ax2.tick_params(colors=MUTED,length=0)
+    for sp in ax2.spines.values(): sp.set_edgecolor(GRID)
+    cbar2=plt.colorbar(im2,ax=ax2,fraction=0.046,pad=0.04)
+    cbar2.set_label("R² Value",color=MUTED,fontsize=9)
+    plt.setp(plt.getp(cbar2.ax.axes,"yticklabels"),color=MUTED)
+    cbar2.outline.set_edgecolor(GRID)
+    ax2.set_title("R² Correlation Heatmap  |  All Index Pairs",color=TEXT,fontsize=12,fontweight="bold",pad=14)
+    plt.tight_layout()
+    fig2.savefig(buf, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close(fig2)
+    st.download_button("⬇ Download Fig 2 (PNG)", buf.getvalue(),
+                       file_name="fig2_r2_heatmap.png", mime="image/png")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: Fig 3 — Scatter: Temperature vs Each Index
+# ═══════════════════════════════════════════════════════════════════════════════
+elif "Fig 3" in page:
+    st.markdown("## 🌡️ Fig 3 — Temperature vs Each Index")
+    st.markdown(
+        "<p style='color:#8b949e;font-size:13px;margin-bottom:1rem'>"
+        "4 subplots: Temp vs NDVI, GNDVI, NDRE, SPAD — colored by health class "
+        "with individual plant labels, regression line, 95% confidence band, "
+        "R², p-value, and slope direction per °C.</p>",
+        unsafe_allow_html=True
+    )
+
+    veg_indices = ["NDVI","GNDVI","NDRE","SPAD"]
+    index_units = {"NDVI":"","GNDVI":"","NDRE":"","SPAD":" (SPAD units)"}
+    fig, axes = plt.subplots(2, 2, figsize=(13, 10))
+    fig.patch.set_facecolor(BG)
+    fig.suptitle("Canopy Temperature vs Vegetation Indices\nColored by Plant Health Category",
+                 color=TEXT, fontsize=13, fontweight="bold")
+
+    for vi, ax in zip(veg_indices, axes.flat):
+        ax.set_facecolor(PANEL)
+        x_all, y_all = df["Temperature"].values, df[vi].values
+        slope, intercept, r, p, se = stats.linregress(x_all, y_all)
+        r2 = r**2
+        x_range = x_all.max() - x_all.min()
+        xfit = np.linspace(x_all.min()-x_range*0.1, x_all.max()+x_range*0.1, 200)
+        yfit = slope*xfit+intercept
+        n_pts = len(x_all); t_crit = stats.t.ppf(0.975, df=n_pts-2)
+        ci = t_crit*se*np.sqrt(1/n_pts+(xfit-x_all.mean())**2/np.sum((x_all-x_all.mean())**2))
+        ax.fill_between(xfit, yfit-ci, yfit+ci, color="#58a6ff", alpha=0.12, zorder=1)
+        ax.plot(xfit, yfit, color="#58a6ff", linewidth=1.5, linestyle="--", alpha=0.7, zorder=2)
+        for h in ["Healthy","Unhealthy","Dry"]:
+            mask = df["Health"]==h; sub=df[mask]
+            ax.scatter(sub["Temperature"],sub[vi],color=HC[h],marker=HM[h],
+                       s=120,alpha=0.95,zorder=4,edgecolors="white",linewidths=0.5,label=h)
+            for _,row in sub.iterrows():
+                ax.annotate(row["Plant"],(row["Temperature"],row[vi]),
+                            textcoords="offset points",xytext=(6,4),
+                            fontsize=6.5,color=HC[h],alpha=0.9)
+        r2_color = "#2ecc71" if r2>=0.5 else ("#f39c12" if r2>=0.25 else "#e74c3c")
+        direction = "decrease" if slope<0 else "increase"
+        sig = "***" if p<0.001 else ("**" if p<0.01 else ("*" if p<0.05 else "ns"))
+        ax.text(0.03,0.97,
+                f"R² = {r2:.3f}\np  = {p:.3f} {sig}\nSlope: {abs(slope):.4f} ({direction}/°C)",
+                transform=ax.transAxes,va="top",ha="left",fontsize=8,
+                color=r2_color,fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.4",facecolor=BG,edgecolor=r2_color,alpha=0.85))
+        ax.set_xlabel("Canopy Temperature (°C)",color=MUTED,fontsize=10)
+        ax.set_ylabel(f"{vi}{index_units[vi]}",color=MUTED,fontsize=10)
+        ax.set_title(f"Temperature  vs  {vi}",color=TEXT,fontsize=11,pad=8)
+        ax.tick_params(colors=MUTED,labelsize=8)
+        ax.legend(fontsize=7.5,framealpha=0.3,facecolor="#1a1f2e",labelcolor=TEXT,loc="upper right")
+        for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+        ax.grid(True,color=GRID,linewidth=0.5,alpha=0.6)
+
+    plt.tight_layout(pad=1.5)
+    st.pyplot(fig, use_container_width=True)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close()
+    st.download_button("⬇ Download Fig 3 (PNG)", buf.getvalue(),
+                       file_name="fig3_temp_vs_indices.png", mime="image/png")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: Fig 4 — Spatial Map (3 panels)
+# ═══════════════════════════════════════════════════════════════════════════════
+elif "Fig 4" in page:
+    st.markdown("## 🗺 Fig 4 — Spatial Map (3 Panels)")
+    st.markdown(
+        "<p style='color:#8b949e;font-size:13px;margin-bottom:1rem'>"
+        "Greenhouse layout showing relative coordinates (meters from center). "
+        "Panel 1: NDVI · Panel 2: SPAD chlorophyll · Panel 3: Composite Health Score. "
+        "Point size scales with value; ring color = human health label.</p>",
+        unsafe_allow_html=True
+    )
+
+    lat = df["Latitude"].values; lon = df["Longitude"].values
+    lat_plot = (lat - lat.mean()) * 1000
+    lon_plot = (lon - lon.mean()) * 1000
+
+    panel_configs = [
+        {"title":"NDVI Distribution","col":"NDVI",
+         "cmap":LinearSegmentedColormap.from_list("ndvi",["#c0392b","#f39c12","#2ecc71"]),
+         "size_scale":600,"label":"NDVI Value"},
+        {"title":"SPAD (Chlorophyll Content)","col":"SPAD",
+         "cmap":LinearSegmentedColormap.from_list("spad",["#e74c3c","#e67e22","#27ae60"]),
+         "size_scale":12,"label":"SPAD Value"},
+        {"title":"Composite Health Score","col":"Health_Score",
+         "cmap":LinearSegmentedColormap.from_list("health",["#c0392b","#f39c12","#27ae60"]),
+         "size_scale":800,"label":"Score (0–1)"},
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 7))
+    fig.patch.set_facecolor(BG)
+    fig.suptitle("Spatial Plant Distribution  |  Greenhouse Area",
+                 color=TEXT, fontsize=13, fontweight="bold", y=1.01)
+
+    for ax, cfg in zip(axes, panel_configs):
+        ax.set_facecolor("#0a0f1a")
+        col_vals = df[cfg["col"]].values
+        mn, mx = col_vals.min(), col_vals.max()
+        sizes = ((col_vals-mn)/(mx-mn+1e-9)) * cfg["size_scale"] + 80
+        sc = ax.scatter(lon_plot,lat_plot,c=col_vals,cmap=cfg["cmap"],
+                        s=sizes,alpha=0.9,edgecolors="white",linewidths=0.6,zorder=3)
+        for _, row in df.iterrows():
+            lx=(row["Longitude"]-lon.mean())*1000; ly=(row["Latitude"]-lat.mean())*1000
+            ax.annotate(row["Plant"].replace("Plant ","P"),(lx,ly),
+                        textcoords="offset points",xytext=(5,5),
+                        fontsize=7,color="white",fontweight="bold",alpha=0.9)
+        for h in ["Healthy","Unhealthy","Dry"]:
+            mask=df["Health"]==h
+            lx=(df.loc[mask,"Longitude"]-lon.mean())*1000
+            ly=(df.loc[mask,"Latitude"]-lat.mean())*1000
+            ax.scatter(lx,ly,s=sizes[mask.values]+120,facecolors="none",
+                       edgecolors=HC[h],linewidths=1.5,zorder=2,alpha=0.8)
+        for gv in np.linspace(lon_plot.min()*1.3,lon_plot.max()*1.3,6):
+            ax.axvline(gv,color=GRID,linewidth=0.4,alpha=0.5)
+        for gh in np.linspace(lat_plot.min()*1.3,lat_plot.max()*1.3,6):
+            ax.axhline(gh,color=GRID,linewidth=0.4,alpha=0.5)
+        cbar=plt.colorbar(sc,ax=ax,fraction=0.04,pad=0.02)
+        cbar.set_label(cfg["label"],color=MUTED,fontsize=8)
+        plt.setp(plt.getp(cbar.ax.axes,"yticklabels"),color=MUTED)
+        cbar.outline.set_edgecolor(GRID)
+        ax.set_title(cfg["title"],color=TEXT,fontsize=10,pad=10)
+        ax.set_xlabel("Relative Easting (m)",color=MUTED,fontsize=8)
+        ax.set_ylabel("Relative Northing (m)",color=MUTED,fontsize=8)
+        ax.tick_params(colors=MUTED,labelsize=7)
+        for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+
+    handles = [mpatches.Patch(color=c,label=f"{h} (ring)") for h,c in HC.items()]
+    fig.legend(handles=handles,loc="lower center",ncol=3,framealpha=0.3,
+               facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.04))
+    plt.tight_layout(pad=1.5)
+    st.pyplot(fig, use_container_width=True)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close()
+    st.download_button("⬇ Download Fig 4 (PNG)", buf.getvalue(),
+                       file_name="fig4_spatial_panels.png", mime="image/png")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE: Advanced Correlations
+# ═══════════════════════════════════════════════════════════════════════════════
+elif "Advanced Correlations" in page:
+    st.markdown("## 🔗 Advanced Correlations")
+
+    adv_tab1, adv_tab2, adv_tab3, adv_tab4, adv_tab5 = st.tabs([
+        "Index Cross-Corr",
+        "vs SPAD Validation",
+        "Temp vs SPAD & NDRE",
+        "Within-Class",
+        "Health Score vs Indices",
+    ])
+
+    def adv_scatter(ax, xc, yc, title, xl, yl):
+        x, y = df[xc].values, df[yc].values
+        slope, intercept, r, p, se = stats.linregress(x, y)
+        r2 = r**2
+        x_range = x.max() - x.min()
+        xfit = np.linspace(x.min()-x_range*0.1, x.max()+x_range*0.1, 200)
+        yfit = slope*xfit+intercept
+        n_pts=len(x); t_crit=stats.t.ppf(0.975,df=n_pts-2)
+        ci = t_crit*se*np.sqrt(1/n_pts+(xfit-x.mean())**2/np.sum((x-x.mean())**2))
+        ax.fill_between(xfit,yfit-ci,yfit+ci,color="#58a6ff",alpha=0.10,zorder=1)
+        ax.plot(xfit,yfit,color="#58a6ff",linewidth=1.4,linestyle="--",alpha=0.75,zorder=2)
+        for h in ["Healthy","Unhealthy","Dry"]:
+            mask=df["Health"]==h; sub=df[mask]
+            ax.scatter(sub[xc],sub[yc],color=HC[h],marker=HM[h],s=110,
+                       alpha=0.95,zorder=4,edgecolors="white",linewidths=0.5,label=h)
+            for _,row in sub.iterrows():
+                ax.annotate(row["Plant"].replace("Plant ","P"),
+                            (row[xc],row[yc]),textcoords="offset points",
+                            xytext=(5,4),fontsize=6.5,color=HC[h],alpha=0.9)
+        badge="#2ecc71" if r2>=0.5 else ("#f39c12" if r2>=0.25 else "#e74c3c")
+        sig="***" if p<0.001 else ("**" if p<0.01 else ("*" if p<0.05 else "ns"))
+        ax.text(0.03,0.97,f"R² = {r2:.3f}\nr  = {r:.3f}\np  = {p:.3f} {sig}",
+                transform=ax.transAxes,va="top",ha="left",fontsize=8,
+                color=badge,fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.35",facecolor=BG,edgecolor=badge,alpha=0.9))
+        ax.set_title(title,color=TEXT,fontsize=10,pad=8)
+        ax.set_xlabel(xl,color=MUTED,fontsize=9); ax.set_ylabel(yl,color=MUTED,fontsize=9)
+        ax.tick_params(colors=MUTED,labelsize=8); ax.set_facecolor(PANEL)
+        for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+        ax.grid(True,color=GRID,linewidth=0.4,alpha=0.5)
+        return r2
+
+    legend_handles = [mpatches.Patch(color=c,label=h) for h,c in HC.items()]
+
+    # ── Tab A: Index cross-correlations ──────────────────────────────────────
+    with adv_tab1:
+        st.markdown("#### NDVI · GNDVI · NDRE Cross-Correlations")
+        st.markdown("<p style='color:#8b949e;font-size:12px'>Reveals how well the three spectral channels agree. "
+                    "Divergence between NDVI and NDRE signals early stress NDVI hasn't caught yet.</p>",
+                    unsafe_allow_html=True)
+        fig, axes = plt.subplots(1,3,figsize=(15,5))
+        fig.patch.set_facecolor(BG)
+        for ax,(xc,yc,t,xl,yl) in zip(axes,[
+            ("NDVI","GNDVI","NDVI  vs  GNDVI","NDVI","GNDVI"),
+            ("NDVI","NDRE","NDVI  vs  NDRE","NDVI","NDRE"),
+            ("GNDVI","NDRE","GNDVI  vs  NDRE","GNDVI","NDRE")]):
+            adv_scatter(ax,xc,yc,t,xl,yl)
+        fig.legend(handles=legend_handles,loc="lower center",ncol=3,framealpha=0.3,
+                   facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.04))
+        plt.tight_layout(pad=1.5)
+        st.pyplot(fig,use_container_width=True)
+        buf=io.BytesIO(); fig.savefig(buf,dpi=150,bbox_inches="tight",facecolor=BG); plt.close()
+        st.download_button("⬇ Download",buf.getvalue(),file_name="figA_index_cross.png",mime="image/png")
+
+    # ── Tab B: SPAD Validation ────────────────────────────────────────────────
+    with adv_tab2:
+        st.markdown("#### Plant-o-Meter vs SPAD Chlorophyll Meter")
+        st.markdown("<p style='color:#8b949e;font-size:12px'>"
+                    "Strong R² here means your remote spectral sensor can substitute the contact SPAD — "
+                    "a publishable sensor validation finding. GNDVI is theoretically the closest to chlorophyll.</p>",
+                    unsafe_allow_html=True)
+        fig, axes = plt.subplots(1,3,figsize=(15,5))
+        fig.patch.set_facecolor(BG)
+        for ax,(xc,yc,t,xl,yl) in zip(axes,[
+            ("NDVI","SPAD","NDVI  vs  SPAD","NDVI","SPAD (Chlorophyll)"),
+            ("GNDVI","SPAD","GNDVI  vs  SPAD","GNDVI","SPAD (Chlorophyll)"),
+            ("NDRE","SPAD","NDRE  vs  SPAD","NDRE","SPAD (Chlorophyll)")]):
+            adv_scatter(ax,xc,yc,t,xl,yl)
+        fig.legend(handles=legend_handles,loc="lower center",ncol=3,framealpha=0.3,
+                   facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.04))
+        plt.tight_layout(pad=1.5)
+        st.pyplot(fig,use_container_width=True)
+        buf=io.BytesIO(); fig.savefig(buf,dpi=150,bbox_inches="tight",facecolor=BG); plt.close()
+        st.download_button("⬇ Download",buf.getvalue(),file_name="figB_spad_validation.png",mime="image/png")
+
+    # ── Tab C: Temp vs SPAD & NDRE ────────────────────────────────────────────
+    with adv_tab3:
+        st.markdown("#### Canopy Temperature vs SPAD & NDRE")
+        st.markdown("<p style='color:#8b949e;font-size:12px'>"
+                    "Does heat stress directly reduce chlorophyll (SPAD)? "
+                    "Does temperature predict early spectral stress (NDRE) before visible symptoms?</p>",
+                    unsafe_allow_html=True)
+        fig, axes = plt.subplots(1,2,figsize=(12,5))
+        fig.patch.set_facecolor(BG)
+        adv_scatter(axes[0],"Temperature","SPAD",
+                    "Temperature  vs  SPAD\n(Heat Stress → Chlorophyll Loss?)",
+                    "Canopy Temperature (°C)","SPAD (Chlorophyll)")
+        adv_scatter(axes[1],"Temperature","NDRE",
+                    "Temperature  vs  NDRE\n(Heat Stress → Early Spectral Stress?)",
+                    "Canopy Temperature (°C)","NDRE")
+        fig.legend(handles=legend_handles,loc="lower center",ncol=3,framealpha=0.3,
+                   facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.06))
+        plt.tight_layout(pad=1.5)
+        st.pyplot(fig,use_container_width=True)
+        buf=io.BytesIO(); fig.savefig(buf,dpi=150,bbox_inches="tight",facecolor=BG); plt.close()
+        st.download_button("⬇ Download",buf.getvalue(),file_name="figC_temp_spad_ndre.png",mime="image/png")
+
+    # ── Tab D: Within-Class Correlations ─────────────────────────────────────
+    with adv_tab4:
+        st.markdown("#### Within-Class Correlations")
+        st.markdown("<p style='color:#8b949e;font-size:12px'>"
+                    "Does the same correlation hold within each health group separately? "
+                    "Reveals whether patterns are driven by class separation or genuine within-group variation.</p>",
+                    unsafe_allow_html=True)
+        pairs_w = [
+            ("NDVI","SPAD","NDVI vs SPAD","NDVI","SPAD"),
+            ("GNDVI","SPAD","GNDVI vs SPAD","GNDVI","SPAD"),
+            ("Temperature","NDVI","Temp vs NDVI","Temperature (°C)","NDVI"),
+        ]
+        health_classes = ["Healthy","Unhealthy","Dry"]
+        fig, axes = plt.subplots(3,3,figsize=(15,13))
+        fig.patch.set_facecolor(BG)
+        fig.suptitle("Within-Class Correlations  |  Same Relationship Across Health Stages?",
+                     color=TEXT,fontsize=13,fontweight="bold")
+        for col_idx,(xc,yc,ptitle,xl,yl) in enumerate(pairs_w):
+            for row_idx,h in enumerate(health_classes):
+                ax = axes[row_idx][col_idx]; ax.set_facecolor(PANEL)
+                sub = df[df["Health"]==h]; color=HC[h]
+                if len(sub)>=2:
+                    x,y=sub[xc].values,sub[yc].values
+                    slope,intercept,r,p,se=stats.linregress(x,y); r2=r**2
+                    x_range=x.max()-x.min()
+                    xfit=np.linspace(x.min()-x_range*0.15,x.max()+x_range*0.15,100)
+                    ax.plot(xfit,slope*xfit+intercept,color=color,linewidth=1.5,linestyle="--",alpha=0.7)
+                    sig="***" if p<0.001 else ("**" if p<0.01 else ("*" if p<0.05 else "ns"))
+                    ax.text(0.03,0.97,f"R²={r2:.3f}\np={p:.3f} {sig}\nn={len(sub)}",
+                            transform=ax.transAxes,va="top",ha="left",fontsize=8,
+                            color=color,fontweight="bold",
+                            bbox=dict(boxstyle="round,pad=0.3",facecolor=BG,edgecolor=color,alpha=0.85))
+                else:
+                    ax.text(0.5,0.5,"Insufficient\ndata (n<2)",transform=ax.transAxes,
+                            ha="center",va="center",color=MUTED,fontsize=9)
+                ax.scatter(sub[xc],sub[yc],color=color,marker=HM[h],
+                           s=120,alpha=0.95,zorder=4,edgecolors="white",linewidths=0.6)
+                for _,row in sub.iterrows():
+                    ax.annotate(row["Plant"].replace("Plant ","P"),(row[xc],row[yc]),
+                                textcoords="offset points",xytext=(5,4),
+                                fontsize=7,color=color,alpha=0.9)
+                ax.set_title(f"{h}  —  {ptitle}",color=color,fontsize=9,pad=6)
+                ax.set_xlabel(xl,color=MUTED,fontsize=8); ax.set_ylabel(yl,color=MUTED,fontsize=8)
+                ax.tick_params(colors=MUTED,labelsize=7)
+                for sp in ax.spines.values(): sp.set_edgecolor(GRID)
+                ax.grid(True,color=GRID,linewidth=0.4,alpha=0.5)
+        plt.tight_layout(pad=1.2)
+        st.pyplot(fig,use_container_width=True)
+        buf=io.BytesIO(); fig.savefig(buf,dpi=150,bbox_inches="tight",facecolor=BG); plt.close()
+        st.download_button("⬇ Download",buf.getvalue(),file_name="figD_within_class.png",mime="image/png")
+
+    # ── Tab E: Health Score vs Individual Indices ─────────────────────────────
+    with adv_tab5:
+        st.markdown("#### Composite Health Score vs Individual Indices")
+        st.markdown(
+            "<p style='color:#8b949e;font-size:12px'>"
+            "Which single sensor best predicts overall health? The highest R² here "
+            "identifies your most informative sensor — useful when you can only carry one device.</p>",
+            unsafe_allow_html=True
+        )
+        indices_e = ["NDVI","GNDVI","NDRE","SPAD","Temperature"]
+        labels_e  = ["NDVI","GNDVI","NDRE","SPAD (Chlorophyll)","Canopy Temp (°C)"]
+        fig, axes = plt.subplots(1,5,figsize=(20,5))
+        fig.patch.set_facecolor(BG)
+        fig.suptitle("Composite Health Score  vs  Individual Sensor Indices",
+                     color=TEXT,fontsize=13,fontweight="bold")
+        r2_scores={}
+        for ax,idx,lbl in zip(axes,indices_e,labels_e):
+            r2=adv_scatter(ax,idx,"Health_Score",f"{idx}  vs  Health Score",lbl,"Health Score (0–1)")
+            r2_scores[idx]=r2
+        fig.legend(handles=legend_handles,loc="lower center",ncol=3,framealpha=0.3,
+                   facecolor=PANEL,labelcolor=TEXT,fontsize=9,bbox_to_anchor=(0.5,-0.06))
+        plt.tight_layout(pad=1.5)
+        st.pyplot(fig,use_container_width=True)
+        buf=io.BytesIO(); fig.savefig(buf,dpi=150,bbox_inches="tight",facecolor=BG); plt.close()
+        st.download_button("⬇ Download",buf.getvalue(),file_name="figE_health_score.png",mime="image/png")
+
+        st.markdown("### Index Ranking by R² with Composite Health Score")
+        best = sorted(r2_scores.items(), key=lambda x: -x[1])
+        rank_data = [{"Rank":i+1,"Index":name,"R²":round(r2,3),
+                      "Strength":"Strong" if r2>=0.6 else ("Moderate" if r2>=0.3 else "Weak")}
+                     for i,(name,r2) in enumerate(best)]
+        st.dataframe(pd.DataFrame(rank_data), use_container_width=True, hide_index=True)
