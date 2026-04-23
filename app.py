@@ -264,7 +264,10 @@ SAMPLE = pd.DataFrame([
      "Temperature": 29.6, "Health": "Healthy"},
 ])
 
-# ── Load data ─────────────────────────────────────────────────────────────────
+# ── Session state — persists df across page navigation ───────────────────────
+if "df" not in st.session_state:
+    st.session_state.df = SAMPLE.copy()
+
 if uploaded is not None:
     try:
         df_raw = pd.read_excel(uploaded)
@@ -276,13 +279,17 @@ if uploaded is not None:
             "Latitude": "Latitude",
         })
         df_raw["Health"] = df_raw["Health"].str.strip()
-        df = df_raw[["Plant","Latitude","Longitude","NDVI","GNDVI","NDRE","SPAD","Temperature","Health"]].copy()
-        st.sidebar.success(f"Loaded {len(df)} plants from file")
+        loaded = df_raw[["Plant","Latitude","Longitude","NDVI","GNDVI","NDRE","SPAD","Temperature","Health"]].copy()
+        # Only update if this is a new upload (compare shape + checksum)
+        checksum = pd.util.hash_pandas_object(loaded).sum()
+        if st.session_state.get("upload_checksum") != checksum:
+            st.session_state.df = loaded
+            st.session_state.upload_checksum = checksum
+        st.sidebar.success(f"Loaded {len(st.session_state.df)} plants from file")
     except Exception as e:
         st.sidebar.error(f"Error reading file: {e}")
-        df = SAMPLE.copy()
-else:
-    df = SAMPLE.copy()
+
+df = st.session_state.df.copy()
 
 # Compute composite health score
 scaler = MinMaxScaler()
@@ -341,11 +348,24 @@ if "Data Entry" in page:
         key="data_editor"
     )
 
+    # Save edits back to session state so all pages see the changes
+    if edited is not None:
+        edited_clean = edited.dropna(subset=["NDVI","GNDVI","NDRE","SPAD","Temperature"])
+        if len(edited_clean) > 0:
+            st.session_state.df = edited_clean.copy()
+            df = edited_clean.copy()
+            # Recompute health score after edits
+            scaler2 = MinMaxScaler()
+            tn2 = 1 - scaler2.fit_transform(df[["Temperature"]].values)
+            vn2 = scaler2.fit_transform(df[["NDVI","GNDVI","NDRE","SPAD"]].values)
+            df["Health_Score"] = (vn2.mean(axis=1)*0.7 + tn2.flatten()*0.3).round(3)
+            st.session_state.df["Health_Score"] = df["Health_Score"]
+
     st.markdown("<br>", unsafe_allow_html=True)
     col_dl1, col_dl2 = st.columns([1, 5])
     with col_dl1:
         buf = io.BytesIO()
-        edited.to_excel(buf, index=False)
+        df.to_excel(buf, index=False)
         st.download_button("⬇ Download Excel", buf.getvalue(),
                            file_name="plant_data.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
