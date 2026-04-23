@@ -415,7 +415,7 @@ elif "Formula Classifier" in page:
         return ""
 
     styled = res_df[["Plant","Human Label","Formula Class","Confidence %",
-                      "Vote Breakdown","Match"]].style.applymap(
+                      "Vote Breakdown","Match"]].style.map(
         color_match, subset=["Match"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
