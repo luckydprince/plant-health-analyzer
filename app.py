@@ -134,8 +134,8 @@ def scatter_ax(ax, df, x_col, y_col, xlabel, ylabel, title):
     y_all = df[y_col].values
     r2, r, p, slope, intercept = lin_reg(x_all, y_all)
 
-    xfit = np.linspace(x_all.min() - abs(x_all.ptp()) * 0.1,
-                       x_all.max() + abs(x_all.ptp()) * 0.1, 200)
+    xfit = np.linspace(x_all.min() - x_all.max() - x_all.min() * 0.1,
+                       x_all.max() + x_all.max() - x_all.min() * 0.1, 200)
     yfit = slope * xfit + intercept
     if len(x_all) >= 2:
         n = len(x_all)
