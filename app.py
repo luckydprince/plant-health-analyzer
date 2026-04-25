@@ -205,12 +205,12 @@ with st.sidebar:
         "📥  Data Entry",
         "🔬  Formula Classifier",
         "📊  Correlation Analysis",
-        "🗺️  Spatial Map",
+        "🗺️  Correlation Map",
         "📈  R² Rankings",
         "🔢  Fig 1 · Correlation Panel",
         "🟩  Fig 2 · R² Heatmap",
         "🌡️  Fig 3 · Temp vs Indices",
-        "🗺  Fig 4 · Spatial Panels",
+        "🗺  Fig 4 · Correlation Panels",
         "🔗  Advanced Correlations",
     ], label_visibility="collapsed")
 
@@ -604,8 +604,8 @@ elif "Correlation Analysis" in page:
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE: Spatial Map
 # ═══════════════════════════════════════════════════════════════════════════════
-elif "Spatial Map" in page:
-    st.markdown("## 🗺️ Spatial Map of Plant Distribution")
+elif "Correlation Map" in page:
+    st.markdown("## 🗺️ Correlation Map of Plant Distribution")
     st.markdown(
         "<p style='color:#8b949e;font-size:13px;margin-bottom:1rem'>"
         "Three spatial panels: NDVI distribution, SPAD chlorophyll, and "
@@ -1025,7 +1025,7 @@ elif "Fig 4" in page:
 
     fig, axes = plt.subplots(1, 3, figsize=(17, 7))
     fig.patch.set_facecolor(BG)
-    fig.suptitle("Spatial Plant Distribution  |  Greenhouse Area",
+    fig.suptitle("Correlation Map  |  Plant Distribution by Greenhouse Area",
                  color=TEXT, fontsize=13, fontweight="bold", y=1.01)
 
     for ax, cfg in zip(axes, panel_configs):
